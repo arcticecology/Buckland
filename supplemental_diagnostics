@@ -1,0 +1,105 @@
+library(vegan)
+library(ggpalaeo)
+library(rioja)
+library(tidyverse)
+
+
+########################################################################################
+### script for stratigraphic plot, analogue & goodness-of-fit reconstruction diagnostics
+
+coreinput<-read.csv(file="T1111_2019_red.csv", row.names=1)
+BCI<-coreinput[,-cbind(1:2)]
+
+TS2<-read.csv(file="TS_red.csv", row.names=1)
+spp<-TS2[,-1]
+
+env<-read.csv(file="env_red.csv", row.names=1)
+
+core <- BCI / rowSums(BCI) * 100
+
+#this code is to retain only taxa that are >=2% in 2 intervals in a core
+N <- 2
+M <- 2
+i <- colSums(core >= M) >= N ## L1
+fos <- core[, i, drop = FALSE]
+
+#this code is to retain only taxa that are >=2% in 2 lakes in a training set
+i <- colSums(spp >= M) >= N ## L1
+spp.red <- spp[, i, drop = FALSE]
+
+chron <- cbind(coreinput[,1] , coreinput[,2])
+colnames(chron) <- c("Depth","Year")
+chron=as.data.frame(chron)
+
+depth <- as.numeric(chron$Depth)
+depth3a <- seq(0, max(depth), by=2)
+depth3b <- sprintf("%.1f", depth3a)
+age <- seq(1830, max(chron$Year), by=20)
+
+nms <- colnames(fos)
+nms2 <- gsub("\\.", " ", nms)
+
+diss <- dist(fos/100)
+clust <- chclust(diss)
+bstick(clust, 10)
+
+sp <- strat.plot(fos, scale.percent=TRUE, yvar=chron$Year, 
+                 title=" ", ylabel="", srt.xlabel=45, clust=clust, col.bar=1,
+                 plot.line=FALSE, plot.bar = TRUE, lwd.bar=4, y.tks=age, #x.pc.inc=10,
+                 xLeft=0.12, xRight=0.95, y.axis=0.1, x.names=nms2, yTop=0.62, cex.yaxis=1,
+                 cex.ylabel=1, cex.xlabel=0.95, cex.axis=1)
+
+#strat.plot(diaconc, scale.percent=FALSE, xLeft = 0.89, yvar = year, y.tks=age, plot.line=TRUE, plot.bar=FALSE,lwd.bar=4,yTop=0.7, xRight=1,
+#           y.axis=FALSE, y.rev=FALSE, add=TRUE, srt.xlabel=45, cex.xlabel=1.5)
+addClustZone(sp, clust, 3, col="black", lwd=2, lty=2)
+
+secondary.scale(yvar = chron$Depth, yvar2 = chron$Depth, n = 12, y.rev = TRUE, ylabel2 = "Depth", xLeft=0.05, yTop=0.62)
+
+#sp <- strat.plot(spec, yvar = depth, y.rev=TRUE, scale.percent=TRUE, title="Round Loch of Glenhead", ylabel="Depth (cm)", xLeft=.25, xRight=1)
+
+
+######################################################
+# analogue, goodness-of-fit reconstruction diagnostics
+
+require("analogue")
+require("ggplot2")
+
+# fos <- decostand(fos, method="hellinger")
+# spp <- decostand(spp, method="hellinger")
+# core <- decostand(core, method="hellinger")
+mod <- MAT(spp.red, env$July)
+autoplot(mod)
+
+#goodness-of-fit residuals
+rlens <- residLen(spp.red, env$July, core)
+
+autoplot(rlens, df = data.frame(age = as.numeric(chron$Year)), x_axis = "age", fill = c("azure4", "grey","white")) +
+  labs(x = "Year", y = "Squared residual distance", fill = "Goodness of fit", categories = c("Good", "Fair", "Poor"))
+
+#analogue distance
+## squared chord lengths for Core 
+AD <- analogue_distances(spp.red, core)
+autoplot(AD, df = data.frame(age = as.numeric(chron$Year)), x_axis = "age", fill = c("azure4", "grey","white")) +
+  labs(x = "Year", y = "Squared-chord distance")
+
+#timetrack supplemental
+
+mod <- timetrack(spp, core, transform = "hellinger",
+                 method = "rda")
+             
+mod
+plot(mod)
+ordisurf(mod, env$July, add=T, col="blue", lwd=2)
+## Plot the timetrack
+mod2 <- timetrack(spp, fos, env,
+                  transform = "hellinger", method = "rda",
+                  formula = ~ env$July)
+mod2
+plot(mod2)
+
+## build a plot up from base parts
+plot(mod2, type = "n", ptype = "l", lty = "solid", lwd = 2.0, col = c("black", "darkblue"))
+points(mod2, which = "ordination", col = "black", cex = 0.8, pch = 21, bg = 1)
+#
+ordisurf(mod2, env$July, add=T, col="black", lwd=1)
+

@@ -1,0 +1,87 @@
+library(vegan)
+library(ggpalaeo)
+library(rioja)
+library(tidyverse)
+
+############################################################################################
+### script for stratigraphic plot of T1111, unmerged taxa (NOT harmonized with Fortin et al. 2015)
+
+
+
+coreinput<-read.csv(file="T1111_long_10June2019.csv", row.names=1)
+
+BCI<-coreinput[,-cbind(1:2)]
+
+core <- BCI / rowSums(BCI) * 100
+
+#this code is to retain only taxa that are >=2% in 2 intervals in a core
+N <- 2
+M <- 2
+i <- colSums(core >= M) >= N ## L1
+fos <- core[, i, drop = FALSE]
+
+chron <- cbind(coreinput[,1] , coreinput[,2])
+colnames(chron) <- c("Depth","Year")
+chron=as.data.frame(chron)
+
+depth <- as.numeric(chron$Depth)
+depth3a <- seq(0, max(depth), by=2)
+depth3b <- sprintf("%.1f", depth3a)
+age <- seq(1830, max(chron$Year), by=20)
+
+nms <-colnames(fos)
+nms2 <- gsub("\\.", " ", nms)
+
+# nms < - make.cepnames(colnames(fos)) #this is an option when code needs taxa names to be 8 char long
+# colnames(fos) <- nms #replaces the old colnames with the new 8 char colnames
+# nms2 <- colnames(fos) 
+# nms3 <- gsub("\\.", " ", nms2) # this code removes the period in the taxa names
+
+# code for CONISS using default (method = "euclidean") on proportions
+diss_euc <- dist(fos/100) # this is euclidean distance matrix
+clust_euc <- chclust(diss_euc)
+bstick(clust_euc, 10)
+
+# square root transformation of proportions makes it chord distance, not euclidean
+diss_chord <- dist(sqrt(fos/100)) # this is chord distance
+clust_chord <- chclust(diss_chord)
+bstick(clust_chord, 10)
+
+# use analogue package to calculate squared chord distance using distance()
+# and "method = SQchord"
+# for T1111 used squared chord, as that's what manuscript figure says
+library(analogue)
+diss_SQchord <- analogue::distance(fos/100, method = "SQchord")
+# m.diss_SQchord <- as.matrix(diss_SQchord) # coerce matrix for diss_ #I think this is not needed?
+d.diss_SQchord <- as.dist(diss_SQchord) 
+clust_SQchord <- chclust(d.diss_SQchord)
+bstick(clust_SQchord, 10)
+
+fos2<-fos[,-cbind(27:28)] #remove tanytarsus undifferentiated and no spur from figure
+
+# remember to change "clust" objects to correct distance
+sp <- strat.plot(fos2, scale.percent=TRUE, yvar=chron$Year, 
+                 title=" ", ylabel="", srt.xlabel=45, clust=clust_SQchord, col.bar=1,
+                 plot.line=FALSE, plot.bar = TRUE, lwd.bar=3, y.tks=age, x.pc.inc=10,
+                 xLeft=0.08, xRight=1, y.axis=0.1, x.names=nms2, yTop=0.62, cex.yaxis=0.8,
+                 cex.ylabel=1, cex.xlabel=0.82, cex.axis=0.8)
+
+addClustZone(sp, clust_SQchord, 2, col="black", lwd=2, lty=2)
+
+secondary.scale(yvar = chron$Year, yvar2 = chron$Depth, cex.ylabel2=0.05,  n = 11, y.rev = FALSE, ylabel2 = "Depth",  xLeft=0.05, yTop=0.62)
+
+# alternate code using stratiplot to generate stratigraphic plot
+tiff("Plot4.tiff", width = 11, height = 8.5, units = 'in', res = 300)
+
+sp <- strat.plot(fos2, scale.percent=TRUE, yvar=chron$Year, 
+                 title=" ", ylabel="", srt.xlabel=45, clust=clust_SQchord, col.bar=1,
+                 plot.line=FALSE, plot.bar = TRUE, lwd.bar=3, y.tks=age, x.pc.inc=10,
+                 xLeft=0.11, xRight=1, y.axis=0.1, x.names=nms2, yTop=0.72, cex.yaxis=0.8,
+                 cex.ylabel=1, cex.xlabel=0.82, cex.axis=0.8)
+
+addClustZone(sp, clust_SQchord, 2, col="black", lwd=2, lty=2)
+
+secondary.scale(yvar = chron$Year, yvar2 = chron$Depth, cex.ylabel2=0.05, n = 11, y.rev = FALSE, ylabel2 = "Depth",  xLeft=0.05, yTop=0.72)
+
+
+dev.off()
